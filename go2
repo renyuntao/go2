@@ -1,0 +1,90 @@
+#!/usr/bin/expect --
+# 功能: 
+# 	无需手动输入密码登录指定主机
+#
+# 用法:
+# 	$::argv0 [ HOSTNAME ]
+#
+# 依赖文件:
+# 	~/.go2
+#       ~/.go2文件中包含用户名和密码信息, 格式如下: 
+#       username: password
+#
+# 历史:
+# 	- 2018-04-23
+#     获取logname时, 首先通过logname命令获取, 获取不到时再通过whoami命令来获取
+#
+# 	- 2018-04-19
+#
+#     * 直接以root登录
+#     * 主机名'.oohip.net'后缀补充
+#     * 显示4台控制机以供选择
+#
+# 	- 2018-04-18
+#     v1.0
+
+# exp_internal 1
+# debug 1
+
+proc help {} {
+	puts "Usage: $::argv0 \[ HOSTNAME ]"
+}
+
+# Get login info
+set logname [exec -ignorestderr sh -c "logname 2> /dev/null || whoami"]
+set fd [open "~$logname/.go2" r]
+set content [read $fd]
+close $fd
+set user [string trim [lindex [split $content :] 0]]
+set passwd [string trim [lindex [split $content :] 1]]
+
+
+if {$::argc >= 2} {
+	puts "Error usage!"
+	help
+	exit 1
+}
+
+# Set remotehost
+if {$::argc == 1} {
+	set remoteHost [lindex $argv 0]
+} else {
+	puts "\[ 1 ] man.se.bjdt.oohip.net"
+	puts "\[ 2 ] man.se.shjc.oohip.net"
+	puts "\[ 3 ] man.se.zzbc2.oohip.net"
+	puts "\[ 4 ] man.se.gzst.oohip.net"
+	send "please select: \[ 1 ] "
+
+	gets stdin select
+	if {$select == 1 || $select == ""} {
+		set remoteHost "man.se.bjdt.oohip.net"
+	} elseif {$select == 2} {
+		set remoteHost "man.se.shjc.oohip.net"
+	} elseif {$select == 3} {
+		set remoteHost "man.se.zzbc2.oohip.net"
+	} elseif {$select == 4} {
+		set remoteHost "man.se.gzst.oohip.net"
+	} else {
+		set remoteHost "man.se.bjdt.oohip.net"
+	}
+}
+
+
+if {![string match "*.oohip.net" $remoteHost]} {
+	set remoteHost "$remoteHost.oohip.net"
+} 
+
+
+set prompt "::sudo::"
+set ssh_arg "sudo -p $prompt su"
+spawn -noecho ssh -o StrictHostKeyChecking=no -t -l $user $remoteHost "$ssh_arg"
+expect { 
+	-nocase "password" {send "$passwd\r"}
+	"@"	   {}
+	"$prompt"   {send "$passwd\r"; interact; exit 0}
+}
+expect { 
+	"$prompt" {send "$passwd\r"}
+	"root"	   {}
+}
+interact
